@@ -1,0 +1,11 @@
+{
+  "_sourceId": "19dd0c08-8e2d-4d79-ab71-64f41b698870",
+  "_storeId": "9e85631fafdee06403b9afa20175d83f",
+  "creator": {
+    "version": "3.6.2"
+  },
+  "description": "2D 水面反射",
+  "name": "2D-WaterReflection",
+  "uuid": "ad3db337-99ab-4959-8ee7-b83b6613984a",
+  "version": "3.6.2"
+}

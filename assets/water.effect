@@ -1,0 +1,134 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: sprite-vs:vert
+      frag: sprite-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        alphaThreshold: { value: 0.5 }
+        noise: { value: white }
+}%
+
+CCProgram sprite-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  #if SAMPLE_FROM_RT
+    #include <common/common-define>
+  #endif
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec4 color;
+  out vec2 uv0;
+
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1);
+
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+
+    #if USE_PIXEL_ALIGNMENT
+      pos = cc_matView * pos;
+      pos.xyz = floor(pos.xyz);
+      pos = cc_matProj * pos;
+    #else
+      pos = cc_matViewProj * pos;
+    #endif
+
+    uv0 = a_texCoord;
+    #if SAMPLE_FROM_RT
+      CC_HANDLE_RT_SAMPLE_FLIP(uv0);
+    #endif
+    color = a_color;
+
+    return pos;
+  }
+}%
+
+CCProgram sprite-fs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <builtin/internal/embedded-alpha>
+  #include <builtin/internal/alpha-test>
+
+  in vec4 color;
+
+  uniform sampler2D noise;
+
+  
+  #if USE_TEXTURE
+    in vec2 uv0;
+    #pragma builtin(local)
+    layout(set = 2, binding = 11) uniform sampler2D cc_spriteTexture;
+  #endif
+
+  float random2d(vec2 coord){
+    return fract(sin(dot(coord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  vec4 frag () {
+    vec4 o = vec4(1, 1, 1, 1);
+    vec4 color = vec4(0., 0., 0., 1.);
+
+    #if USE_TEXTURE
+      o *= CCSampleWithAlphaSeparated(cc_spriteTexture, uv0);
+      #if IS_GRAY
+        float gray  = 0.2126 * o.r + 0.7152 * o.g + 0.0722 * o.b;
+        o.r = o.g = o.b = gray;
+      #endif
+    
+      // 弄个t接收cc_time.x, *= 0.6是因为正常速太快，变慢点
+      float t = cc_time.x * 0.5;
+
+      vec2 off1 = texture(noise, uv0 + t * vec2(.5, .1)).xy;
+
+      // 偏移值缩放0.1倍，不然波纹太过分了
+      off1 *= .01;
+
+      color += texture(cc_spriteTexture, off1 + uv0);
+
+      color *= smoothstep(-0.3, 1., uv0.y) -0.1;
+      // color *= step(0.1, uv0.y);
+      
+      // color += texture(noise, uv0);
+
+      // 浮沫
+      vec2 mouv = uv0;
+      mouv.y *= 20.;
+      float n3 = floor(mouv.y);
+      float n4 = random2d(vec2(n3));
+
+      vec2 scale = vec2(2., 3.);
+      vec2 baseuv = uv0 * scale;
+      baseuv.x += t * 0.2 * n4;
+
+      float c1 = texture(noise, baseuv).x ;
+      c1 = 1. - smoothstep(0., 0.22, c1);
+      color += vec4(c1);
+
+    #endif
+
+    // float t = cc_time.x * 0.6;
+
+
+    // o *= color;
+    // ALPHA_TEST(color);
+    return color;
+  }
+}%
